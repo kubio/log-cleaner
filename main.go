@@ -22,13 +22,11 @@ func (fi ByName) Less(i, j int) bool {
 	return fi[j].ModTime().Unix() < fi[i].ModTime().Unix()
 }
 
-// 指定されたファイル名がディレクトリかどうか調べる
 func IsDirectory(name string) (isDir bool, err error) {
 	fInfo, err := os.Stat(name) // FileInfo型が返る。
 	if err != nil {
-		return false, err // もしエラーならエラー情報を返す
+		return false, err
 	}
-	// ディレクトリかどうかチェック
 	return fInfo.IsDir(), nil
 }
 
@@ -39,13 +37,15 @@ func main() {
 		limitDay    int
 	)
 
-	flag.StringVar(&searchFile, "f", "", "search file pattern")
+	flag.StringVar(&searchFile, "f", "", "search file pattern. ex) /your/path/*.log")
 	flag.BoolVar(&forceDelete, "d", false, "force delete")
 	flag.IntVar(&limitDay, "l", 0, "limited day. default 1week(7days)")
 	flag.Parse()
 
 	if searchFile == "" {
-		fmt.Errorf("Search file patter is empty.\n")
+		fmt.Printf("\x1b[31m[Error]\x1b[0m Search file pattern is empty.\n\n")
+		fmt.Printf("[Usage]\n")
+		flag.PrintDefaults()
 		os.Exit(1)
 	}
 	// 期限日が指定されていなければ一週間を設定
@@ -54,15 +54,13 @@ func main() {
 	}
 
 	var dirName, filePattern = filepath.Split(searchFile)
-	if dirName == "" { // ディレクトリが指定されていなければカレントディレクトリを指定
+	if dirName == "" {
 		var cDir, _ = os.Getwd()
 		dirName = cDir + "/"
 	}
 
-	// 取得しようとしているパスがディレクトリかチェック
 	var isDir, _ = IsDirectory(dirName + filePattern)
 
-	// ディレクトリならば、そのディレクトリ配下のファイルを調べる。
 	if isDir == true {
 		dirName = dirName + filePattern
 		filePattern = ""
@@ -79,8 +77,12 @@ func main() {
 	now := time.Now()
 	// 保護する期間
 	limit := now.AddDate(0, 0, -(limitDay))
-	fmt.Printf("now: %s\n", now.Format("2006-01-02 15:04:05"))
-	fmt.Printf("limit: %s\n", limit.Format("2006-01-02 15:04:05"))
+
+	if forceDelete == false {
+		fmt.Printf("now: %s\n", now.Format("2006-01-02 15:04:05"))
+		fmt.Printf("limit: %s\n\n", limit.Format("2006-01-02 15:04:05"))
+		fmt.Printf("Delete Files: \n")
+	}
 
 	sort.Sort(ByName(fileInfos))
 	for _, fileInfo := range fileInfos {
@@ -95,11 +97,11 @@ func main() {
 					if err := os.Remove(dirName + findName); err != nil {
 						fmt.Println(err)
 					}
+					fmt.Printf("Delteted: %s [modified: %s]\n", findName, (fileInfo).ModTime().Format("2006-01-02 15:04:05"))
 				} else { // 表示だけ
 					fmt.Printf("%s [modified: %s]\n", findName, (fileInfo).ModTime().Format("2006-01-02 15:04:05"))
 				}
 			}
 		}
-
 	}
 }
