@@ -37,7 +37,7 @@ func main() {
 		limitDay    int
 	)
 
-	flag.StringVar(&searchFile, "f", "", "search file pattern. ex) /your/path/*.log")
+	flag.StringVar(&searchFile, "f", "", "search file pattern. e.g. /your/path/*.log")
 	flag.BoolVar(&forceDelete, "d", false, "force delete")
 	flag.IntVar(&limitDay, "l", 0, "limited day. default 1week(7days)")
 	flag.Parse()
@@ -59,8 +59,7 @@ func main() {
 		dirName = cDir + "/"
 	}
 
-	var isDir, _ = IsDirectory(dirName + filePattern)
-
+	var isDir, err = IsDirectory(dirName + filePattern)
 	if isDir == true {
 		dirName = dirName + filePattern
 		filePattern = ""
@@ -69,7 +68,7 @@ func main() {
 	fileInfos, err := ioutil.ReadDir(dirName)
 
 	if err != nil {
-		fmt.Errorf("Directory cannot read %s\n", err)
+		fmt.Printf("Directory cannot read \n")
 		os.Exit(1)
 	}
 
@@ -84,6 +83,7 @@ func main() {
 		fmt.Printf("Delete Files: \n")
 	}
 
+	var b_isFound = false
 	sort.Sort(ByName(fileInfos))
 	for _, fileInfo := range fileInfos {
 		var findName = (fileInfo).Name()
@@ -93,15 +93,21 @@ func main() {
 		}
 		if matched == true {
 			if limit.After((fileInfo).ModTime()) {
+				b_isFound = true
 				if forceDelete == true { // 削除フラグが立っていれば削除
 					if err := os.Remove(dirName + findName); err != nil {
 						fmt.Println(err)
+					} else {
+						fmt.Printf("Delteted: %s [modified: %s]\n", findName, (fileInfo).ModTime().Format("2006-01-02 15:04:05"))
 					}
-					fmt.Printf("Delteted: %s [modified: %s]\n", findName, (fileInfo).ModTime().Format("2006-01-02 15:04:05"))
 				} else { // 表示だけ
 					fmt.Printf("%s [modified: %s]\n", findName, (fileInfo).ModTime().Format("2006-01-02 15:04:05"))
 				}
 			}
 		}
+	}
+
+	if !b_isFound {
+		fmt.Printf("File patter is not match. [%s]\n", dirName+filePattern)
 	}
 }
