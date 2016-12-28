@@ -1,57 +1,15 @@
 package main
 
 import (
-	"flag"
+	"./cleaner"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
-	"sort"
 	"time"
 )
 
-type ByName []os.FileInfo
-
-func (fi ByName) Len() int {
-	return len(fi)
-}
-func (fi ByName) Swap(i, j int) {
-	fi[i], fi[j] = fi[j], fi[i]
-}
-func (fi ByName) Less(i, j int) bool {
-	return fi[j].ModTime().Unix() < fi[i].ModTime().Unix()
-}
-
-func IsDirectory(name string) (isDir bool, err error) {
-	fInfo, err := os.Stat(name) // FileInfo型が返る。
-	if err != nil {
-		return false, err
-	}
-	return fInfo.IsDir(), nil
-}
-
 func main() {
-	var (
-		searchFile  string
-		forceDelete bool
-		limitDay    int
-	)
-
-	flag.StringVar(&searchFile, "f", "", "search file pattern. e.g. /your/path/*.log")
-	flag.BoolVar(&forceDelete, "d", false, "force delete")
-	flag.IntVar(&limitDay, "l", 0, "limited day. default 1week(7days)")
-	flag.Parse()
-
-	if searchFile == "" {
-		fmt.Printf("\x1b[31m[Error]\x1b[0m Search file pattern is empty.\n\n")
-		fmt.Printf("[Usage]\n")
-		flag.PrintDefaults()
-		os.Exit(1)
-	}
-	// 期限日が指定されていなければ一週間を設定
-	if limitDay == 0 {
-		limitDay = 7
-	}
+	var searchFile, forceDelete, limitDay = cleaner.Parse()
 
 	var dirName, filePattern = filepath.Split(searchFile)
 	if dirName == "" {
@@ -59,55 +17,31 @@ func main() {
 		dirName = cDir + "/"
 	}
 
-	var isDir, err = IsDirectory(dirName + filePattern)
-	if isDir == true {
-		dirName = dirName + filePattern
-		filePattern = ""
-	}
-
-	fileInfos, err := ioutil.ReadDir(dirName)
-
-	if err != nil {
-		fmt.Printf("Directory cannot read \n")
-		os.Exit(1)
-	}
-
-	// 現在時刻
-	now := time.Now()
-	// 保護する期間
-	limit := now.AddDate(0, 0, -(limitDay))
-
-	if forceDelete == false {
-		fmt.Printf("now: %s\n", now.Format("2006-01-02 15:04:05"))
-		fmt.Printf("limit: %s\n\n", limit.Format("2006-01-02 15:04:05"))
-		fmt.Printf("Delete Files: \n")
-	}
-
-	var b_isFound = false
-	sort.Sort(ByName(fileInfos))
-	for _, fileInfo := range fileInfos {
-		var findName = (fileInfo).Name()
-		var matched = true
-		if filePattern != "" {
-			matched, _ = filepath.Match(filePattern, findName)
-		}
-		if matched == true {
-			if limit.After((fileInfo).ModTime()) {
-				b_isFound = true
-				if forceDelete == true { // 削除フラグが立っていれば削除
-					if err := os.Remove(dirName + findName); err != nil {
-						fmt.Println(err)
-					} else {
-						fmt.Printf("Delteted: %s [modified: %s]\n", findName, (fileInfo).ModTime().Format("2006-01-02 15:04:05"))
-					}
-				} else { // 表示だけ
-					fmt.Printf("%s [modified: %s]\n", findName, (fileInfo).ModTime().Format("2006-01-02 15:04:05"))
-				}
-			}
-		}
-	}
-
-	if !b_isFound {
+	// ファイル検索
+	matchedFileInfos := cleaner.SearchFiles(dirName, filePattern, limitDay)
+	if len(matchedFileInfos) == 0 {
 		fmt.Printf("File patter is not match. [%s]\n", dirName+filePattern)
+		os.Exit(0)
 	}
+
+	var timeFormat = "2006-01-02 15:04:05"
+	if forceDelete == false {
+		// 結果出力
+		fmt.Printf("now: %s\n", time.Now().Format(timeFormat))
+		fmt.Printf("limit: %s\n\n", time.Now().AddDate(0, 0, -(limitDay)).Format(timeFormat))
+		fmt.Printf("Delete Files: \n")
+		for _, fileInfo := range matchedFileInfos {
+			var findName = (fileInfo).Name()
+			fmt.Printf("%s [modified: %s]\n", findName, (fileInfo).ModTime().Format(timeFormat))
+		}
+	} else {
+		var err = cleaner.DeleteFiles(dirName, matchedFileInfos)
+		if err != nil {
+			fmt.Println("something error.")
+			os.Exit(1)
+		} else {
+			fmt.Println("complete.")
+		}
+	}
+
 }
